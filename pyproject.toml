@@ -1,0 +1,18 @@
+[project]
+name = "arrow-translator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Dimos Konstantinos", email = "konstantinos.dimos@themart.gr" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pyarrow>=25.0.1",
+    "pyarrow-stubs>=20.0.0.20260819",
+    "sqlalchemy>=2.0.52",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
