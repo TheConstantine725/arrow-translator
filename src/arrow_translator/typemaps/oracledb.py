@@ -1,11 +1,11 @@
 """
-Data Type Definitions of cx_Oracle python driver mapped to Apache Arrow(PyArrow) data types
+Data Type Definitions of OracleDB (Oracle DB) python library to Apache Arrow(PyArrow) data types
 """
 
 import pyarrow as pa
 
-DIALECT = "cx_Oracle"
-TYPE_MAPS = {
+DIALECT = "oracledb"
+TYPE_MAPS = {  # modern Oracle driver, same type names
         "DB_TYPE_NUMBER": pa.decimal128(38, 10),
         "DB_TYPE_BINARY_DOUBLE": pa.float64(),
         "DB_TYPE_BINARY_FLOAT": pa.float32(),

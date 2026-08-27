@@ -4,7 +4,8 @@ OIDs for Microsoft SQL Server mapped to Apache Arrow (PyArrow) data types.
 
 import pyarrow as pa
 
-TYPEMAP =  {
+DIALECT = "pymssql"
+TYPE_MAPS =  {
         bool: pa.bool_(),
         int: pa.int64(),
         float: pa.float64(),

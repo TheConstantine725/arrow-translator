@@ -4,6 +4,7 @@ OIDs for ODBC Driver of Microsoft SQL Server mapped to Apache Arrow(PyArrow) dat
 
 import pyarrow as pa
 
+DIALECT = "pyodbc"
 TYPE_MAPS =  {
         bool: pa.bool_(),
         int: pa.int64(),
