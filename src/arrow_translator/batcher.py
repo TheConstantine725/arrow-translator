@@ -10,6 +10,12 @@ from .descriptor import create_arrow_schema
 
 
 class Batch:
+    """
+    A high level abstraction of the Arrow Record Batch that allows for fast additions or removals of field
+    during extraction.
+    Provides properties for more effective logging.
+    """
+
     def __init__(self, batch: pa.RecordBatch):
         self.batch = batch
 
@@ -55,6 +61,12 @@ class Batch:
 
 
 class ArrowBatchReader:
+    """
+    A small builder class. It works as the interface to collect the data using SQLAlchemy then translates
+    the DBAPI cursor's metadata to valid Arrow Data Types.
+    Helping to query the data more flexibly and in a streaming way.
+    """
+
     def __init__(self, name: str):
         self.name: str = name
         self.extraction_timestamp: datetime.datetime = (
@@ -202,6 +214,34 @@ def create_batch_generator(
     remove_columns: str | list[str] | None = None,
     enrichment_map: dict[str, Any] | None = None,
 ) -> Iterator[pa.RecordBatch]:
+    """
+    A function that builds an ArrowBatchReader and yields from it the resulting Arrow RecordBatches
+
+    Args:
+        name (str): The name of the dataset for collection
+        engine (Engine): An SQLAlchemy Engine of the source system of
+            the data
+        query (str|TextClause): The query with which the data are generated
+            by the source system.
+            It will be transformed internally to an SQLAlchemy TextClause if
+            it is valid SQL statement.
+            Can be a str or an SQLAlchemy TextClause.
+        bind_params (Optional[dict[str, Any]]): The parameters with which the
+            TextClause. Default is None.
+        batch_size (int): The number of rows to collect on each iteration.
+            Default is 20_000.
+        override_schema (pyarrow.Schema): Manual Arrow Schema provision.
+            It bypasses the automatic arrow translation.
+            Default is None.
+        remove_columns (str|list[str]|None): Columns to remove from the resulting
+            Arrow RecordBatch. Default is None.
+        enrichment_map (dict[str, Any]|None): Add columns and values to them to
+            the resulting Arrow RecordBatch.Suggested to use only
+            for metadata enrichment.
+
+    Yields:
+        Iterator[RecordBatch]: The translated from SQLAlchemy to Arrow RecordBatch.
+    """
     batch_generator = ArrowBatchReader(name=name)
     (
         batch_generator.with_engine(engine)
