@@ -1,11 +1,12 @@
-import time
-from typing import Self, Any, final
-from collections.abc import Sequence, Generator, Iterator
-from sqlalchemy import Engine, text, TextClause, Row
 import datetime
-import numpy as np
+import time
+from collections.abc import Generator, Iterator, Sequence
+from typing import Any, Self, final
 
+import numpy as np
 import pyarrow as pa
+from sqlalchemy import Engine, Row, TextClause, text
+
 from .descriptor import create_arrow_schema
 
 
@@ -69,9 +70,7 @@ class ArrowBatchReader:
 
     def __init__(self, name: str):
         self.name: str = name
-        self.extraction_timestamp: datetime.datetime = (
-            datetime.datetime.now().astimezone()
-        )
+        self.extraction_timestamp = datetime.datetime.now().astimezone()
         self.engine: Engine | None = None
         self.query: TextClause | None = None
         self.columns_to_remove: list[str] | None = None
@@ -126,9 +125,8 @@ class ArrowBatchReader:
         return self
 
     def _cursor_result_transposition(self, rows: Sequence[Row[Any]]):
-        temp_array = np.array(rows, dtype=object)
         try:
-            result = temp_array.transpose()
+            result = np.array(rows, dtype=object).T
         except Exception as error:
             print(f"Error in the transposition of the dataset {self.name}")
             print(error)
@@ -201,7 +199,7 @@ class ArrowBatchReader:
                 for source_batch in cursor_result.fetchmany(batch_size):
                     final_batch = self._compile_batch(source_batch, self.arrow_schema)
                     yield final_batch.collect()
-                    time.sleep(0.01)
+                    time.sleep(0.001)
 
 
 def create_batch_generator(
