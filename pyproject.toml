@@ -12,6 +12,7 @@ dependencies = [
     "pyarrow>=25.0.1",
     "pyarrow-stubs>=20.0.0.20260819",
     "sqlalchemy>=2.0.52",
+    "sqlalchemy-hana>=4.6.1",
 ]
 
 [build-system]

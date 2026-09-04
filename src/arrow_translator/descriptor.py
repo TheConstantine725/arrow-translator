@@ -1,10 +1,11 @@
+import re
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
+
+import pyarrow as pa
 
 from .typemaps import Lexicon
-from typing import Any
-import pyarrow as pa
-from dataclasses import dataclass
-import re
 
 type CursorDescription = Sequence[tuple[Any]]
 
@@ -13,6 +14,7 @@ type CursorDescription = Sequence[tuple[Any]]
 class FieldDescriptor:
     name: str
     type_code: Any | None
+    display_size: Any | None
     internal_size: Any | None
     precision: int | None
     scale: int | None
@@ -26,11 +28,13 @@ class FieldDescriptor:
 
     @property
     def fixed_name(self) -> str:
-        pattern = re.compile(pattern="(//)|(\\)|(/)")
-        _name = re.sub(pattern=pattern, string=self.name, repl="_")
+        _name = self.name
+        for pat in ("//", "\\", "/"):
+            if pat in _name:
+                _name = _name.replace(pat, "_")
         return _name.lower()
 
-    def to_pyarrow(self, dialect: str) -> pa.Field[Any]:
+    def to_pyarrow(self, dialect: str) -> pa.Field:
         data_type = Lexicon.to_pyarrow(dialect, self.type_code)
         if isinstance(data_type, pa.Decimal128Type):
             data_type = pa.decimal128(self.precision, self.scale)

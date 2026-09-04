@@ -126,10 +126,11 @@ class ArrowBatchReader:
 
     def _cursor_result_transposition(self, rows: Sequence[Row[Any]]):
         try:
-            result = np.array(rows, dtype=object).T
+            result = np.array([tuple(row) for row in rows], dtype=object).transpose()
         except Exception as error:
             print(f"Error in the transposition of the dataset {self.name}")
             print(error)
+            raise error
         else:
             return result
 
@@ -137,7 +138,7 @@ class ArrowBatchReader:
         self,
         transposed_data: np.ndarray[Any],
     ):
-        result_arrow_arrays: list[pa.Array[Any]] = []
+        result_arrow_arrays: list[pa.Array] = []
         try:
             for column in transposed_data:
                 result_arrow_arrays.append(pa.array(column))
@@ -147,9 +148,7 @@ class ArrowBatchReader:
         else:
             return result_arrow_arrays
 
-    def _arrow_arrays_to_batch(
-        self, arrow_arrays: list[pa.Array[Any]], schema: pa.Schema
-    ):
+    def _arrow_arrays_to_batch(self, arrow_arrays: list[pa.Array], schema: pa.Schema):
         try:
             result_record_batch = pa.record_batch(data=arrow_arrays, schema=schema)
         except Exception as error:
@@ -191,7 +190,7 @@ class ArrowBatchReader:
 
         with self.engine.connect().execution_options(stream_results=True) as connection:
             with connection.execute(self.query) as cursor_result:
-                dialect = connection.dialect.name
+                dialect = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
                 if self.arrow_schema is None:
                     self.arrow_schema = create_arrow_schema(cursor_description, dialect)
@@ -206,7 +205,7 @@ def create_batch_generator(
     name: str,
     engine: Engine,
     query: str | TextClause,
-    bind_params: dict[str, Any],
+    bind_params: dict[str, Any] | None = None,
     batch_size: int = 20_000,
     override_schema: pa.Schema | None = None,
     remove_columns: str | list[str] | None = None,
