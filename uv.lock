@@ -11,6 +11,10 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pyarrow-stubs" },
     { name = "sqlalchemy" },
+]
+
+[package.dev-dependencies]
+dev = [
     { name = "sqlalchemy-hana" },
 ]
 
@@ -20,8 +24,10 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=25.0.1" },
     { name = "pyarrow-stubs", specifier = ">=20.0.0.20260819" },
     { name = "sqlalchemy", specifier = ">=2.0.52" },
-    { name = "sqlalchemy-hana", specifier = ">=4.6.1" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "sqlalchemy-hana", specifier = ">=4.6.1" }]
 
 [[package]]
 name = "greenlet"
