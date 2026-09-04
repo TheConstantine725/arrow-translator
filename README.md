@@ -18,7 +18,7 @@ Create an SQLAlchemy Engine and an SQL Query statement
 from sqlalchemy import create_engine
 from arrow_translator import create_batch_generator
 
-some_engine = create_engine(url = "dialect://hostname:port@user:password/dbname")
+some_engine = create_engine(url = "dialect://user:password@hostname:port/dbname")
 
 some_query = "select id, field, other_field from some_schema.some_table"
 # Give your dataset some name
