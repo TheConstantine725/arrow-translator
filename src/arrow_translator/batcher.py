@@ -8,6 +8,7 @@ import pyarrow as pa
 from sqlalchemy import Engine, Row, TextClause, text
 
 from .descriptor import create_arrow_schema
+from .logger import LOGGER
 
 
 class Batch:
@@ -84,34 +85,64 @@ class ArrowBatchReader:
         self.bind_params = bind_params
         self.columns_to_remove = cols_to_remove
         self.columns_for_enrichment = metadata_to_add
+        self.text_clause = self._create_text_clause(query, bind_params)
 
-    def _make_str_to_query(self, string: str):
-        try:
-            result = text(string)
-        except Exception as error:
-            print(f"Error in transforming the string to query for resource {self.name}")
-            print(error)
-            exit()
+    def _create_text_clause(
+        self,
+        q: str | TextClause,
+        bind_params: dict[str, Any] | None,
+    ):
+        result = None
+        if not isinstance(q, TextClause):
+            try:
+                LOGGER.debug(
+                    f"Transforming Raw Query to SQLAlchemy TextClause for resource {self.name}"
+                )
+                temp = text(q)
+            except Exception as error:
+                LOGGER.error(
+                    f"TextClause creation for resource {self.name} failed. Exiting the program",
+                    stack_info=True,
+                )
+                exit()
+            else:
+                LOGGER.info(f"TextClause creation for resource {self.name} successful")
+                result = temp
+        else:
+            LOGGER.info(f"Query for resource {self.name} is already TextClause")
+            result = q
+        if bind_params is not None:
+            if isinstance(bind_params, dict):
+                try:
+                    LOGGER.debug(
+                        f"Binding Parameters to TextClause for resource {self.name}"
+                    )
+                    temp = result.bindparams(**bind_params)
+                except Exception as error:
+                    LOGGER.error(
+                        f"Error when binding Parameters to TextClause for resource {self.name}"
+                    )
+                else:
+                    result = temp
+                    return result
         else:
             return result
 
-    def test_query(self):
-        if isinstance(self.query, str):
-            self.query: TextClause = self._make_str_to_query(self.query)
-        elif isinstance(self.query, TextClause):
-            return self
-        else:
-            raise TypeError("The query parameter should of type str or TextClause")
-
     def _cursor_result_transposition(self, rows: Sequence[Row[Any]]):
-        print(rows)
         try:
+            LOGGER.debug(f"Transposing source cursor result for resource {self.name}")
             result = np.array([tuple(row) for row in rows], dtype=object).transpose()
         except Exception as error:
-            print(f"Error in the transposition of the dataset {self.name}")
-            print(error)
-            raise error
+            LOGGER.error(
+                f"Error in the transposition of the dataset {self.name}",
+                "Exiting the program",
+                stack_info=True,
+            )
+            exit()
         else:
+            LOGGER.info(
+                f"Created Transposed cursor result ndarray for resource {self.name}"
+            )
             return result
 
     def _transposed_arrow_arrays(
@@ -120,24 +151,35 @@ class ArrowBatchReader:
     ):
         result_arrow_arrays: list[pa.Array] = []
         try:
+            LOGGER.debug(
+                f"Creating an Arrow Array for each transposed Cursor Result Column for resource {self.name}"
+            )
             for column in transposed_data:
                 result_arrow_arrays.append(pa.array(column))
         except Exception as error:
-            print("Error in the transformation of the numpy array to Arrow array")
-            print(error)
+            LOGGER.error(
+                f"Error in the transformation of the numpy array to Arrow array for resource {self.name}",
+                stack_info=True,
+            )
+            exit()
         else:
+            LOGGER.info(f"Succesfully Created Arrow Arrays for resource {self.name}.")
             return result_arrow_arrays
 
     def _arrow_arrays_to_batch(self, arrow_arrays: list[pa.Array], schema: pa.Schema):
         try:
+            LOGGER.debug(f"Creating Arrow RecordBatch for resource {self.name}")
             result_record_batch = pa.record_batch(data=arrow_arrays, schema=schema)
         except Exception as error:
-            print(
-                f"Error in the transformation of the arrow arrays to a RecordBatch for resource {self.name}"
+            LOGGER.error(
+                f"Error in the transformation of the arrow arrays to a RecordBatch for resource {self.name}",
+                stack_info=True,
             )
-            print(error)
+            exit()
         else:
-            return Batch(result_record_batch)
+            result = Batch(result_record_batch)
+            LOGGER.info(f"Created Arrow RecordBatch for resource {self.name}")
+            return result
 
     def _compile_batch(
         self, cursor_result: Sequence[Row[Any]], arrow_schema: pa.Schema
@@ -146,9 +188,16 @@ class ArrowBatchReader:
         arrow_arrays = self._transposed_arrow_arrays(transposed)
         batch = self._arrow_arrays_to_batch(arrow_arrays, arrow_schema)
         if self.columns_for_enrichment is not None:
+            LOGGER.info(
+                f"Enriching dataset with {self.columns_for_enrichment} for resource {self.name}"
+            )
             batch = batch.append_columns(self.columns_for_enrichment)
         if self.columns_to_remove is not None:
+            LOGGER.info(
+                f"Removing columns ({self.columns_to_remove}) from dataset with  for resource {self.name}"
+            )
             batch = batch.remove_columns(self.columns_to_remove)
+        LOGGER.info(f"Appending _extraction_timestamp for resource {self.name}")
         batch = batch.append_columns(
             {"_extraction_timestamp": self.extraction_timestamp}
         )
@@ -157,7 +206,6 @@ class ArrowBatchReader:
     def generate_batches(
         self, batch_size: int = 20_000, override_schema: pa.Schema | None = None
     ) -> Iterator[pa.RecordBatch]:
-        self.test_query()
         arrow_schema = override_schema
         if self.engine is None:
             raise ValueError(
@@ -169,15 +217,22 @@ class ArrowBatchReader:
             )
 
         with self.engine.connect().execution_options(stream_results=True) as connection:
-            with connection.execute(self.query) as cursor_result:
+            with connection.execute(self.text_clause) as cursor_result:
                 driver = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
                 if arrow_schema is None:
+                    LOGGER.warning(
+                        f"Arrow Schema wan not provided for resource {self.name}. It will be created ...",
+                        # stack_info=True,
+                    )
                     arrow_schema = create_arrow_schema(cursor_description, driver)
                 while source_batch := cursor_result.fetchmany(batch_size):
                     final_batch = self._compile_batch(source_batch, arrow_schema)
                     yield final_batch.collect()
-                    time.sleep(0.001)
+                    LOGGER.info(
+                        f"Generated Arrow RecordBatch for resource {self.name} || Size: {final_batch.size}||Rows: {final_batch.num_of_rows}",
+                    )
+                    time.sleep(0.01)
 
 
 def create_batch_generator(
@@ -228,8 +283,7 @@ def create_batch_generator(
     )
     yield from batch_generator.generate_batches(batch_size, override_schema)
 
-
-# For testing
+# ===================================== FOR TESTING ====================================
 def transpose_cursor_result(name: str, cursor_result: Sequence[Row[Any]]):
     print(cursor_result)
     try:
