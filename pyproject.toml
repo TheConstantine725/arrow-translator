@@ -20,5 +20,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "sqlalchemy-hana>=4.6.1",
+    "psycopg[binary]>=3.3.5",
+    "python-dotenv"
 ]
