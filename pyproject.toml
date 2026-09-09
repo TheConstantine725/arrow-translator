@@ -1,7 +1,7 @@
 [project]
 name = "arrow-translator"
 version = "0.1.0"
-description = "Add your description here"
+description = "Small Library to extract data using sqlalchemy project to pyarrow (Arrow) RecordBatches"
 readme = "README.md"
 authors = [
     { name = "Dimos Konstantinos", email = "konstantinos.dimos@themart.gr" }
