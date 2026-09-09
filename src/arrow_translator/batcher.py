@@ -217,7 +217,7 @@ class ArrowBatchReader:
             )
 
         with self.engine.connect().execution_options(stream_results=True) as connection:
-            with connection.execute(self.text_clause) as cursor_result:
+            with connection.execute(statement=self.text_clause) as cursor_result:
                 driver = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
                 if arrow_schema is None:
@@ -232,7 +232,24 @@ class ArrowBatchReader:
                     LOGGER.info(
                         f"Generated Arrow RecordBatch for resource {self.name} || Size: {final_batch.size}||Rows: {final_batch.num_of_rows}",
                     )
-                    time.sleep(0.01)
+
+    def create_batch_reader(
+        self, batch_size: int = 20_000, override_schema: Optional[pa.Schema] = None
+    ):
+        arrow_schema = override_schema
+        batch_generator = self.generate_batches(
+            batch_size=batch_size, override_schema=arrow_schema
+        )
+        if arrow_schema is None:
+            first_batch = next(batch_generator)
+            arrow_schema = first_batch.schema
+
+            def recompiled():
+                yield first_batch
+                yield from batch_generator
+
+            batch_generator = recompiled()
+        return pa.RecordBatchReader.from_batches(arrow_schema, batch_generator)
 
 
 def create_batch_generator(
@@ -282,6 +299,58 @@ def create_batch_generator(
         metadata_to_add=enrichment_map,
     )
     yield from batch_generator.generate_batches(batch_size, override_schema)
+
+
+def create_record_batch_reader(
+    name: str,
+    engine: Engine,
+    query: str | TextClause,
+    bind_params: dict[str, Any] | None = None,
+    batch_size: int = 20_000,
+    override_schema: pa.Schema | None = None,
+    remove_columns: str | list[str] | None = None,
+    enrichment_map: dict[str, Any] | None = None,
+) -> pa.RecordBatchReader:
+    """
+    A function that builds an ArrowBatchReader and yields from it the resulting Arrow RecordBatches
+
+    Args:
+        name (str): The name of the dataset for collection
+        engine (Engine): An SQLAlchemy Engine of the source system of
+            the data
+        query (str|TextClause): The query with which the data are generated
+            by the source system.
+            It will be transformed internally to an SQLAlchemy TextClause if
+            it is valid SQL statement.
+            Can be a str or an SQLAlchemy TextClause.
+        bind_params (Optional[dict[str, Any]]): The parameters with which the
+            TextClause. Default is None.
+        batch_size (int): The number of rows to collect on each iteration.
+            Default is 20_000.
+        override_schema (pyarrow.Schema): Manual Arrow Schema provision.
+            It bypasses the automatic arrow translation.
+            Default is None.
+        remove_columns (str|list[str]|None): Columns to remove from the resulting
+            Arrow RecordBatch. Default is None.
+        enrichment_map (dict[str, Any]|None): Add columns and values to them to
+            the resulting Arrow RecordBatch.Suggested to use only
+            for metadata enrichment.
+
+    Yields:
+        RecordBatchReader: Create a RecordBatchReader from an SQLAlchemy Engine.
+    """
+    batch_generator = ArrowBatchReader(
+        name=name,
+        engine=engine,
+        query=query,
+        bind_params=bind_params,
+        cols_to_remove=remove_columns,
+        metadata_to_add=enrichment_map,
+    )
+    return batch_generator.create_batch_reader(
+        batch_size=batch_size, override_schema=override_schema
+    )
+
 
 # ===================================== FOR TESTING ====================================
 def transpose_cursor_result(name: str, cursor_result: Sequence[Row[Any]]):
