@@ -2,7 +2,7 @@
 A small tool for querying data from databases using standard SQLAlchemy Engines and returns the underlying DBAPI Datatypes to Apache Arrow data types for more homogenised data pipelines
 
 Available Dialects:
-  * Postgres (psycopg2)
+  * Postgres (psycopg2, psycopg3) Binaries recommended
   * MySQL (PyMySQL, MySQL-Connector)
   * Microsoft SQL Server (pymssql, pyodbc) 
     * pyodbc requires from you that ODBC driver for MS SQL Server be install on the machine
