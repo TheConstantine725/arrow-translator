@@ -56,8 +56,15 @@ class TableDescriptor:
             [_field.to_pyarrow(dialect) for _field in self.field_descriptors]
         )
 
+    def __iter__(self):
+        yield from self.field_descriptors
+
 
 def create_arrow_schema(
     cursor_description: CursorDescription, dialect: str
 ) -> pa.Schema:
     return TableDescriptor(cursor_description).to_arrow_schema(dialect)
+
+
+def create_table_descriptor(cursor_description: CursorDescription):
+    return TableDescriptor(cursor_description)
