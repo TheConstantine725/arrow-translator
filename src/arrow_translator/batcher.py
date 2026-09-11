@@ -49,9 +49,7 @@ class Batch:
 
     def append_columns(self, value_mapping: dict[str, Any]) -> Self:
         for column_name, value in value_mapping.items():
-            array_of_value = pa.array(
-                [value for _ in range(self.num_of_rows)],
-            )
+            array_of_value = pa.repeat(value, self.num_of_rows)
             self.batch = self.batch.append_column(column_name, array_of_value)
         return self
 
@@ -99,13 +97,13 @@ class ArrowBatchReader:
                 LOGGER.debug(
                     "Transforming Raw Query to SQLAlchemy TextClause for resource %s",
                     self.name,
-                    exc_info=True,
                 )
                 temp = text(q)
             except Exception:
                 LOGGER.error(
                     "TextClause creation for resource %s failed. Exiting the program",
                     self.name,
+                    exc_info=True,
                     stack_info=True,
                 )
                 exit()
@@ -170,6 +168,7 @@ class ArrowBatchReader:
                 "Error in the transformation of the zipped list to Arrow array for resource %s",
                 self.name,
                 stack_info=True,
+                exc_info=True,
             )
             exit()
         else:
@@ -184,6 +183,7 @@ class ArrowBatchReader:
             LOGGER.error(
                 "Error in the transformation of the arrow arrays to a RecordBatch for resource %s",
                 self.name,
+                exc_info=True,
                 stack_info=True,
             )
             exit()
@@ -198,8 +198,10 @@ class ArrowBatchReader:
         if enrichment_map is None:
             return {"_extraction_timestamp": self.extraction_timestamp}
         else:
-            temp = enrichment_map
-            temp.update({"_extraction_timestamp": self.extraction_timestamp})
+            temp = {
+                **enrichment_map,
+                "_extraction_timestamp": self.extraction_timestamp,
+            }
             return temp
 
     def _compile_batch(
@@ -227,7 +229,11 @@ class ArrowBatchReader:
         return batch
 
     def generate_batches(
-        self, batch_size: int = 20_000, override_schema: pa.Schema | None = None
+        self,
+        batch_size: int = 20_000,
+        override_schema: pa.Schema | None = None,
+        columns_to_remove: list[str] | str | None = None,
+        enrichment_map: dict[str, Any] | None = None,
     ) -> Iterator[pa.RecordBatch]:
         arrow_schema = override_schema
         if self.engine is None:
@@ -247,17 +253,19 @@ class ArrowBatchReader:
                     LOGGER.warning(
                         "Arrow Schema wan not provided for resource %s. It will be created ...",
                         self.name,
+                        stack_info=True,
                     )
                     arrow_schema = create_arrow_schema(cursor_description, driver)
                 while source_batch := cursor_result.fetchmany(batch_size):
-                    final_batch = self._compile_batch(source_batch, arrow_schema)
+                    final_batch = self._compile_batch(
+                        source_batch, arrow_schema, columns_to_remove, enrichment_map
+                    )
                     yield final_batch.collect()
                     LOGGER.info(
                         "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
                         self.name,
                         final_batch.size,
                         final_batch.num_of_rows,
-                        exc_info=True,
                     )
 
     # def create_batch_reader(
