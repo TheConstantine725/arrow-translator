@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "numpy>=2.5.2",
     "pyarrow>=25.0.1",
     "pyarrow-stubs>=20.0.0.20260819",
     "sqlalchemy>=2.0.52",
@@ -21,5 +20,6 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "psycopg[binary]>=3.3.5",
+    "sqlalchemy-hana",
     "python-dotenv"
 ]

@@ -1,4 +1,3 @@
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -22,7 +21,7 @@ class FieldDescriptor:
 
     @property
     def is_nullable(self) -> bool:
-        if self.null_ok == True or self.null_ok is None:
+        if self.null_ok or self.null_ok is None:
             return True
         return False
 
