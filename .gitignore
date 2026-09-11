@@ -10,3 +10,4 @@ wheels/
 .venv
 .dump
 .env
+**.log

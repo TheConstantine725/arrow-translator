@@ -1,9 +1,7 @@
 import datetime
-import time
 from collections.abc import Iterator, Sequence
 from typing import Any, Optional, Self, final
 
-import numpy as np
 import pyarrow as pa
 from sqlalchemy import Engine, Row, TextClause, text
 
@@ -80,11 +78,14 @@ class ArrowBatchReader:
     ):
         self.name = name
         self.extraction_timestamp = datetime.datetime.now().astimezone()
+        LOGGER.debug(
+            "Initialized Arrow Batch Generator for resource %s at %s",
+            self.name,
+            str(self.extraction_timestamp),
+        )
         self.engine = engine
         self.query = query
         self.bind_params = bind_params
-        self.columns_to_remove = cols_to_remove
-        self.columns_for_enrichment = metadata_to_add
         self.text_clause = self._create_text_clause(query, bind_params)
 
     def _create_text_clause(
@@ -96,17 +97,24 @@ class ArrowBatchReader:
         if not isinstance(q, TextClause):
             try:
                 LOGGER.debug(
-                    f"Transforming Raw Query to SQLAlchemy TextClause for resource {self.name}"
+                    "Transforming Raw Query to SQLAlchemy TextClause for resource %s",
+                    self.name,
+                    exc_info=True,
                 )
                 temp = text(q)
-            except Exception as error:
+            except Exception:
                 LOGGER.error(
-                    f"TextClause creation for resource {self.name} failed. Exiting the program",
+                    "TextClause creation for resource %s failed. Exiting the program",
+                    self.name,
                     stack_info=True,
                 )
                 exit()
             else:
-                LOGGER.info(f"TextClause creation for resource {self.name} successful")
+                LOGGER.info(
+                    "TextClause creation for resource %s successful",
+                    self.name,
+                    exc_info=True,
+                )
                 result = temp
         else:
             LOGGER.info(f"Query for resource {self.name} is already TextClause")
@@ -130,35 +138,37 @@ class ArrowBatchReader:
 
     def _cursor_result_transposition(self, rows: Sequence[Row[Any]]):
         try:
-            LOGGER.debug(f"Transposing source cursor result for resource {self.name}")
-            result = np.array([tuple(row) for row in rows], dtype=object).transpose()
-        except Exception as error:
+            LOGGER.debug("Transposing source cursor result for resource %s", self.name)
+            result = zip(*rows)
+        except Exception:
             LOGGER.error(
-                f"Error in the transposition of the dataset {self.name}",
-                "Exiting the program",
+                "Error in the transposition of the dataset %s. Exiting the program",
+                self.name,
+                exc_info=True,
                 stack_info=True,
             )
             exit()
         else:
             LOGGER.info(
-                f"Created Transposed cursor result ndarray for resource {self.name}"
+                "Created a zipped list of rows for resource %s",
+                self.name,
             )
             return result
 
     def _transposed_arrow_arrays(
         self,
-        transposed_data: np.ndarray[Any],
-    ):
-        result_arrow_arrays: list[pa.Array] = []
+        transposed_data: zip,
+    ) -> list[pa.Array]:
         try:
             LOGGER.debug(
-                f"Creating an Arrow Array for each transposed Cursor Result Column for resource {self.name}"
+                "Creating an Arrow Array for each transposed Cursor Result Column for resource %s",
+                self.name,
             )
-            for column in transposed_data:
-                result_arrow_arrays.append(pa.array(column))
-        except Exception as error:
+            result_arrow_arrays = [pa.array(col) for col in transposed_data]
+        except Exception:
             LOGGER.error(
-                f"Error in the transformation of the numpy array to Arrow array for resource {self.name}",
+                "Error in the transformation of the zipped list to Arrow array for resource %s",
+                self.name,
                 stack_info=True,
             )
             exit()
@@ -168,39 +178,52 @@ class ArrowBatchReader:
 
     def _arrow_arrays_to_batch(self, arrow_arrays: list[pa.Array], schema: pa.Schema):
         try:
-            LOGGER.debug(f"Creating Arrow RecordBatch for resource {self.name}")
+            LOGGER.debug("Creating Arrow RecordBatch for resource %s", self.name)
             result_record_batch = pa.record_batch(data=arrow_arrays, schema=schema)
-        except Exception as error:
+        except Exception:
             LOGGER.error(
-                f"Error in the transformation of the arrow arrays to a RecordBatch for resource {self.name}",
+                "Error in the transformation of the arrow arrays to a RecordBatch for resource %s",
+                self.name,
                 stack_info=True,
             )
             exit()
         else:
             result = Batch(result_record_batch)
-            LOGGER.info(f"Created Arrow RecordBatch for resource {self.name}")
+            LOGGER.info("Created Arrow RecordBatch for resource %s", self.name)
             return result
 
-    def _compile_batch(
-        self, cursor_result: Sequence[Row[Any]], arrow_schema: pa.Schema
+    def _create_map_of_columns_for_enrichment(
+        self, enrichment_map: dict[str, Any] | None = None
     ):
+        if enrichment_map is None:
+            return {"_extraction_timestamp": self.extraction_timestamp}
+        else:
+            temp = enrichment_map
+            temp.update({"_extraction_timestamp": self.extraction_timestamp})
+            return temp
+
+    def _compile_batch(
+        self,
+        cursor_result: Sequence[Row[Any]],
+        arrow_schema: pa.Schema,
+        columns_to_remove: list[str] | str | None = None,
+        columns_for_enrichment: dict[str, Any] | None = None,
+    ):
+        if isinstance(columns_to_remove, str):
+            columns_to_remove = [columns_to_remove]
         transposed = self._cursor_result_transposition(cursor_result)
         arrow_arrays = self._transposed_arrow_arrays(transposed)
         batch = self._arrow_arrays_to_batch(arrow_arrays, arrow_schema)
-        if self.columns_for_enrichment is not None:
+        if columns_to_remove is not None:
             LOGGER.info(
-                f"Enriching dataset with {self.columns_for_enrichment} for resource {self.name}"
+                "Removing columns (%s) from dataset with  for resource %s",
+                str(columns_to_remove),
+                self.name,
             )
-            batch = batch.append_columns(self.columns_for_enrichment)
-        if self.columns_to_remove is not None:
-            LOGGER.info(
-                f"Removing columns ({self.columns_to_remove}) from dataset with  for resource {self.name}"
-            )
-            batch = batch.remove_columns(self.columns_to_remove)
-        LOGGER.info(f"Appending _extraction_timestamp for resource {self.name}")
-        batch = batch.append_columns(
-            {"_extraction_timestamp": self.extraction_timestamp}
-        )
+            batch = batch.remove_columns(columns_to_remove)
+        final_map = self._create_map_of_columns_for_enrichment(columns_for_enrichment)
+        batch = batch.append_columns(final_map)
+        LOGGER.info("Appending enrichment for resource %s", self.name)
         return batch
 
     def generate_batches(
@@ -222,34 +245,38 @@ class ArrowBatchReader:
                 cursor_description = cursor_result.cursor.description
                 if arrow_schema is None:
                     LOGGER.warning(
-                        f"Arrow Schema wan not provided for resource {self.name}. It will be created ...",
-                        # stack_info=True,
+                        "Arrow Schema wan not provided for resource %s. It will be created ...",
+                        self.name,
                     )
                     arrow_schema = create_arrow_schema(cursor_description, driver)
                 while source_batch := cursor_result.fetchmany(batch_size):
                     final_batch = self._compile_batch(source_batch, arrow_schema)
                     yield final_batch.collect()
                     LOGGER.info(
-                        f"Generated Arrow RecordBatch for resource {self.name} || Size: {final_batch.size}||Rows: {final_batch.num_of_rows}",
+                        "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
+                        self.name,
+                        final_batch.size,
+                        final_batch.num_of_rows,
+                        exc_info=True,
                     )
 
-    def create_batch_reader(
-        self, batch_size: int = 20_000, override_schema: Optional[pa.Schema] = None
-    ):
-        arrow_schema = override_schema
-        batch_generator = self.generate_batches(
-            batch_size=batch_size, override_schema=arrow_schema
-        )
-        if arrow_schema is None:
-            first_batch = next(batch_generator)
-            arrow_schema = first_batch.schema
+    # def create_batch_reader(
+    #     self, batch_size: int = 20_000, override_schema: Optional[pa.Schema] = None
+    # ):
+    #     arrow_schema = override_schema
+    #     batch_generator = self.generate_batches(
+    #         batch_size=batch_size, override_schema=arrow_schema
+    #     )
+    #     if arrow_schema is None:
+    #         first_batch = next(batch_generator)
+    #         arrow_schema = first_batch.schema
 
-            def recompiled():
-                yield first_batch
-                yield from batch_generator
+    #         def recompiled():
+    #             yield first_batch
+    #             yield from batch_generator
 
-            batch_generator = recompiled()
-        return pa.RecordBatchReader.from_batches(arrow_schema, batch_generator)
+    #         batch_generator = recompiled()
+    #     return pa.RecordBatchReader.from_batches(arrow_schema, batch_generator)
 
 
 def create_batch_generator(
@@ -301,62 +328,62 @@ def create_batch_generator(
     yield from batch_generator.generate_batches(batch_size, override_schema)
 
 
-def create_record_batch_reader(
-    name: str,
-    engine: Engine,
-    query: str | TextClause,
-    bind_params: dict[str, Any] | None = None,
-    batch_size: int = 20_000,
-    override_schema: pa.Schema | None = None,
-    remove_columns: str | list[str] | None = None,
-    enrichment_map: dict[str, Any] | None = None,
-) -> pa.RecordBatchReader:
-    """
-    A function that builds an ArrowBatchReader and yields from it the resulting Arrow RecordBatches
+# def create_record_batch_reader(
+#     name: str,
+#     engine: Engine,
+#     query: str | TextClause,
+#     bind_params: dict[str, Any] | None = None,
+#     batch_size: int = 20_000,
+#     override_schema: pa.Schema | None = None,
+#     remove_columns: str | list[str] | None = None,
+#     enrichment_map: dict[str, Any] | None = None,
+# ) -> pa.RecordBatchReader:
+#     """
+#     A function that builds an ArrowBatchReader and yields from it the resulting Arrow RecordBatches
 
-    Args:
-        name (str): The name of the dataset for collection
-        engine (Engine): An SQLAlchemy Engine of the source system of
-            the data
-        query (str|TextClause): The query with which the data are generated
-            by the source system.
-            It will be transformed internally to an SQLAlchemy TextClause if
-            it is valid SQL statement.
-            Can be a str or an SQLAlchemy TextClause.
-        bind_params (Optional[dict[str, Any]]): The parameters with which the
-            TextClause. Default is None.
-        batch_size (int): The number of rows to collect on each iteration.
-            Default is 20_000.
-        override_schema (pyarrow.Schema): Manual Arrow Schema provision.
-            It bypasses the automatic arrow translation.
-            Default is None.
-        remove_columns (str|list[str]|None): Columns to remove from the resulting
-            Arrow RecordBatch. Default is None.
-        enrichment_map (dict[str, Any]|None): Add columns and values to them to
-            the resulting Arrow RecordBatch.Suggested to use only
-            for metadata enrichment.
+#     Args:
+#         name (str): The name of the dataset for collection
+#         engine (Engine): An SQLAlchemy Engine of the source system of
+#             the data
+#         query (str|TextClause): The query with which the data are generated
+#             by the source system.
+#             It will be transformed internally to an SQLAlchemy TextClause if
+#             it is valid SQL statement.
+#             Can be a str or an SQLAlchemy TextClause.
+#         bind_params (Optional[dict[str, Any]]): The parameters with which the
+#             TextClause. Default is None.
+#         batch_size (int): The number of rows to collect on each iteration.
+#             Default is 20_000.
+#         override_schema (pyarrow.Schema): Manual Arrow Schema provision.
+#             It bypasses the automatic arrow translation.
+#             Default is None.
+#         remove_columns (str|list[str]|None): Columns to remove from the resulting
+#             Arrow RecordBatch. Default is None.
+#         enrichment_map (dict[str, Any]|None): Add columns and values to them to
+#             the resulting Arrow RecordBatch.Suggested to use only
+#             for metadata enrichment.
 
-    Yields:
-        RecordBatchReader: Create a RecordBatchReader from an SQLAlchemy Engine.
-    """
-    batch_generator = ArrowBatchReader(
-        name=name,
-        engine=engine,
-        query=query,
-        bind_params=bind_params,
-        cols_to_remove=remove_columns,
-        metadata_to_add=enrichment_map,
-    )
-    return batch_generator.create_batch_reader(
-        batch_size=batch_size, override_schema=override_schema
-    )
+#     Yields:
+#         RecordBatchReader: Create a RecordBatchReader from an SQLAlchemy Engine.
+#     """
+#     batch_generator = ArrowBatchReader(
+#         name=name,
+#         engine=engine,
+#         query=query,
+#         bind_params=bind_params,
+#         cols_to_remove=remove_columns,
+#         metadata_to_add=enrichment_map,
+#     )
+#     return batch_generator.create_batch_reader(
+#         batch_size=batch_size, override_schema=override_schema
+#     )
 
 
 # ===================================== FOR TESTING ====================================
 def transpose_cursor_result(name: str, cursor_result: Sequence[Row[Any]]):
     print(cursor_result)
     try:
-        result = np.array(cursor_result, dtype=object).transpose()
+        result = zip(*cursor_result)
     except Exception as error:
         print(f"Error in the transposition of the dataset {name}")
         print(error)
@@ -364,15 +391,18 @@ def transpose_cursor_result(name: str, cursor_result: Sequence[Row[Any]]):
     else:
         return result
 
+def zipped_result(name: str, cursor_result: Sequence[Row[Any]]):
+    zipped = zip(*cursor_result)
+    arrays = [pa.array(col) for col in zipped]
+    return arrays
+
 
 def create_arrow_arrays(
     name: str,
-    transposed_data: np.ndarray[Any],
+    transposed_data: zip,
 ):
-    result_arrow_arrays: list[pa.Array] = []
     try:
-        for column in transposed_data:
-            result_arrow_arrays.append(pa.array(column))
+        result_arrow_arrays = [pa.array(col) for col in transposed_data]
     except Exception as error:
         print(
             f"Error in the transformation of the numpy array to Arrow array for resource {name}"
