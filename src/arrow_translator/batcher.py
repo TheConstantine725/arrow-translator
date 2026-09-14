@@ -249,6 +249,19 @@ class ArrowBatchReader:
                             "number_of_rows": final_batch.num_rows,
                         },
                     )
+                    _batch_size = final_batch.nbytes
+                    _num_of_rows = final_batch.num_rows
+                    yield final_batch
+                    LOGGER.info(
+                        "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
+                        self.name,
+                        _batch_size,
+                        _num_of_rows,
+                        extra={
+                            "batch_size": _batch_size,
+                            "number_of_rows": _num_of_rows,
+                        },
+                    )
 
     def create_batch_reader(self, override_schema: pa.Schema):
         arrow_schema = override_schema

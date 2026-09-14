@@ -1,5 +1,6 @@
 import logging
-import sys
+
+from .json_logging import JsonLinesFormatter
 
 DEFAULT_LOGGER_NAME = "arrow-translator"
 FILE_LOGGER = ".arrow-trans.log"
@@ -17,7 +18,7 @@ def create_default_logger():
     )
     console_handler.setFormatter(console_formatter)
     console_handler.setLevel(logging.WARNING)
-    file_handler.setFormatter(console_formatter)
+    file_handler.setFormatter(JsonLinesFormatter())
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     logger.setLevel(logging.DEBUG)
