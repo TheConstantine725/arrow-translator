@@ -18,16 +18,16 @@ Create an SQLAlchemy Engine and an SQL Query statement
 from sqlalchemy import create_engine
 from arrow_translator import create_batch_generator
 
-some_engine = create_engine(url = "dialect://user:password@hostname:port/dbname")
+some_engine = create_engine(url="dialect://user:password@hostname:port/dbname")
 
 some_query = "select id, field, other_field from some_schema.some_table"
 # Give your dataset some name
-arrow_generator = create_batch_generator(name = "some_name", 
-    engine = some_engine, 
-    query = some_query)
+arrow_generator = create_batch_generator(
+    name="some_name", engine=some_engine, query=some_query
+)
 
 for batch in arrow_generator:
-  ...
+    ...
 ```
 The result will be something like that:
 
@@ -74,21 +74,20 @@ You can enrich the resulted RecordBatch with additional metadata that you can th
 from sqlalchemy import create_engine
 from arrow_translator import create_batch_generator
 
-some_engine = create_engine(url = "dialect://hostname:port@user:password/dbname")
+some_engine = create_engine(url="dialect://hostname:port@user:password/dbname")
 
 some_query = "select id, field, other_field from some_schema.some_table"
 
 # Create an dictionary with a field name as a string
 # And a value that you wish pass
-enrich = {"enrichment_field":0}
+enrich = {"enrichment_field": 0}
 
-arrow_generator = create_batch_generator(name = "some_name", 
-    engine = some_engine, 
-    query = some_query,
-    enrichment_map = enrich)
+arrow_generator = create_batch_generator(
+    name="some_name", engine=some_engine, query=some_query, enrichment_map=enrich
+)
 
 for batch in arrow_generator:
-  ...
+    ...
 ```
 The result per batch will be something like that:
 ```markdown
@@ -103,21 +102,22 @@ You can remove fields from the resulted RecordBatch by passing a list of the fie
 from sqlalchemy import create_engine
 from arrow_translator import create_batch_generator
 
-some_engine = create_engine(url = "dialect://user:password@hostname:port/dbname")
+some_engine = create_engine(url="dialect://user:password@hostname:port/dbname")
 
 some_query = "select id, field, other_field from some_schema.some_table"
 
 # Create a list with the column names you wish to exclude from your dataset
 columns_for_removal = ["other_field"]
 
-arrow_generator = create_batch_generator(name = "some_name", 
-    engine = some_engine, 
-    query = some_query,
-    remove_columns = columns_for_removal
-    )
+arrow_generator = create_batch_generator(
+    name="some_name",
+    engine=some_engine,
+    query=some_query,
+    remove_columns=columns_for_removal,
+)
 
 for batch in arrow_generator:
-  ...
+    ...
 ```
 The result per batch will be something like that:
 ```markdown

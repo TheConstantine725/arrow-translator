@@ -1,6 +1,6 @@
 import datetime
 from collections.abc import Iterator, Sequence
-from typing import Any, Optional, Self, final
+from typing import Any, Optional
 
 import pyarrow as pa
 from sqlalchemy import Engine, Row, TextClause, text
@@ -40,8 +40,6 @@ class ArrowBatchReader:
         self.batch_size = batch_size
         self.columns_to_remove = self.__handle_columns_to_remove(cols_to_remove)
         self.metadata_enrichment = self.__handle_metadata_enrichment(metadata_to_add)
-        self.original_translation = None
-        self.final_translation = None
 
     def __handle_columns_to_remove(self, _cols_to_remove: Optional[str | list] = None):
         if _cols_to_remove is None:
@@ -87,12 +85,11 @@ class ArrowBatchReader:
                     exc_info=True,
                     stack_info=True,
                 )
-                exit()
+                raise
             else:
                 LOGGER.info(
                     "TextClause creation for resource %s successful",
                     self.name,
-                    exc_info=True,
                 )
                 result = temp
         else:
@@ -121,21 +118,13 @@ class ArrowBatchReader:
     def _translate_original_schema(self, cursor_description, driver):
         LOGGER.debug("Translating original schema for resource %s", self.name)
         res = create_arrow_schema(cursor_description, driver)
-        self.original_translation = res
         return res
 
     def _precompute_final_schema(self, original_schema: pa.Schema):
-        temp = []
         try:
             LOGGER.debug("Rebuilding final arrow schema for resource %s", self.name)
-            if self.columns_to_remove is not None:
-                for i, field in enumerate(original_schema):
-                    if field.name not in self.columns_to_remove:
-                        temp.append(field)
-
-            if self.metadata_enrichment is not None:
-                for key in self.metadata_enrichment.keys():
-                    temp.append(key)
+            temp = self._kept_fields(original_schema)
+            temp.extend(self.metadata_enrichment.keys())
             result = pa.schema(temp)
         except Exception:
             LOGGER.error(
@@ -144,21 +133,23 @@ class ArrowBatchReader:
             )
             raise
         else:
-            self.final_translation = result
             return result
+
+    def _kept_fields(self, schema: pa.Schema) -> list[pa.Field]:
+        return [field for field in schema if field.name not in self.columns_to_remove]
 
     def _row_to_columns_transposition(self, rows: Sequence[Row[Any]]):
         try:
             LOGGER.debug("Transposing source cursor result for resource %s", self.name)
             result = zip(*rows)
-        except Exception:
+        except Exception as error:
             LOGGER.error(
                 "Error in the transposition of the dataset %s. Exiting the program",
                 self.name,
                 exc_info=True,
                 stack_info=True,
             )
-            exit()
+            raise error
         else:
             LOGGER.info(
                 "Created a zipped list of rows for resource %s",
@@ -167,32 +158,40 @@ class ArrowBatchReader:
             return result
 
     def _compile_arrays_to_record_batch(
-        self, transposed_columns: zip, schema: pa.Schema
+        self, transposed_columns: zip, schema: pa.Schema, kept_columns: set[str]
     ):
         temp_arrays = []
-        temp_schema = schema
+        temp_schema = []
         try:
             LOGGER.debug(
                 "Building Arrays for the Arrow RecordBatch for resource %s", self.name
             )
-            for i, (array, field) in enumerate(zip(transposed_columns, schema)):
-                if field.name not in self.columns_to_remove:
-                    temp_arrays.append(pa.array(obj=array))
+            for array, field in zip(transposed_columns, schema):
+                if field.name in kept_columns:
+                    temp_arrays.append(pa.array(obj=array, type=field.type))
+                    temp_schema.append(field)
                 else:
                     LOGGER.debug(
                         "Ignored Field %s for resource %s. Removing from in process schema...",
                         field.name,
                         self.name,
                     )
-                    temp_schema = temp_schema.remove(i)
 
-            record_batch = pa.record_batch(data=temp_arrays, schema=temp_schema)
-
+            num_of_rows = len(temp_arrays[0]) if temp_arrays else 0
             for field, value in self.metadata_enrichment.items():
-                LOGGER.debug("Enriching with metadata the ")
-                record_batch = record_batch.append_column(
-                    field.name, pa.repeat(value, size=record_batch.num_rows)
+                LOGGER.debug(
+                    "Enriching with metadata with the name %s the resource %s",
+                    field.name,
+                    self.name,
                 )
+                temp_arrays.append(
+                    pa.repeat(value=value, size=num_of_rows).cast(field.type)
+                )
+                temp_schema.append(field)
+
+            record_batch = pa.record_batch(
+                data=temp_arrays, schema=pa.schema(temp_schema)
+            )
         except Exception as error:
             LOGGER.error(
                 "Error in the transformation of the arrow arrays to a RecordBatch for resource %s",
@@ -227,16 +226,18 @@ class ArrowBatchReader:
                     LOGGER.warning(
                         "Arrow Schema wan not provided for resource %s. It will be created ...",
                         self.name,
-                        stack_info=True,
                     )
                     arrow_schema = self._translate_original_schema(
                         cursor_description, driver
                     )
-                    self._precompute_final_schema(arrow_schema)
+                kept_fields = set(
+                    field.name for field in self._kept_fields(arrow_schema)
+                )
                 while source_batch := cursor_result.fetchmany(self.batch_size):
                     final_batch = self._compile_arrays_to_record_batch(
                         self._row_to_columns_transposition(source_batch),
                         arrow_schema,
+                        kept_fields,
                     )
                     yield final_batch
                     LOGGER.info(
@@ -247,19 +248,6 @@ class ArrowBatchReader:
                         extra={
                             "batch_size": final_batch.nbytes,
                             "number_of_rows": final_batch.num_rows,
-                        },
-                    )
-                    _batch_size = final_batch.nbytes
-                    _num_of_rows = final_batch.num_rows
-                    yield final_batch
-                    LOGGER.info(
-                        "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
-                        self.name,
-                        _batch_size,
-                        _num_of_rows,
-                        extra={
-                            "batch_size": _batch_size,
-                            "number_of_rows": _num_of_rows,
                         },
                     )
 
@@ -283,23 +271,27 @@ class ArrowBatchReader:
                 LOGGER.warning(
                     "Arrow Schema wan not provided for resource %s. It will be created ...",
                     self.name,
-                    stack_info=True,
                 )
                 arrow_schema = self._translate_original_schema(
                     cursor_description, driver
                 )
-                final_arrow_schema = self._precompute_final_schema(arrow_schema)
+            final_arrow_schema = self._precompute_final_schema(arrow_schema)
 
         except Exception as error:
             cursor_result.close()
             connection.close()
             raise error
 
-        def _batcher():
+        def _batcher() -> Iterator[pa.RecordBatch]:
             try:
+                kept_fields = set(
+                    field.name for field in self._kept_fields(arrow_schema)
+                )
                 while source_batch := cursor_result.fetchmany(self.batch_size):
                     final_batch = self._compile_arrays_to_record_batch(
-                        self._row_to_columns_transposition(source_batch), arrow_schema
+                        self._row_to_columns_transposition(source_batch),
+                        arrow_schema,
+                        kept_fields,
                     )
                     yield final_batch
                     LOGGER.info(
