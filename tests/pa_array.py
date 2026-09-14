@@ -5,7 +5,7 @@ import pyarrow as pa
 
 def main():
     _dt = datetime.now().astimezone()
-    print(arr := pa.array([_dt for _ in range(1)]))
+    print(arr := pa.repeat(_dt, 100))
     print(arr.type)
 
 
