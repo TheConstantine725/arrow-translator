@@ -4,6 +4,7 @@ import sys
 DEFAULT_LOGGER_NAME = "arrow-translator"
 FILE_LOGGER = ".arrow-trans.log"
 
+
 def create_default_logger():
     logger = logging.getLogger(DEFAULT_LOGGER_NAME)
     file_handler = logging.FileHandler(encoding="utf-8", filename=FILE_LOGGER, mode="a")
