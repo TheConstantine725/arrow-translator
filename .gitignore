@@ -11,3 +11,4 @@ wheels/
 .dump
 .env
 **.log
+.filedump
