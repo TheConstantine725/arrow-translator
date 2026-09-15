@@ -1,7 +1,31 @@
 import datetime
 import json
-from logging import Formatter, Handler, LogRecord
+from logging import Formatter, LogRecord
 
+PARAMETERS = {
+    "asctime",
+    "exc_info",
+    "msecs",
+    "exc_text",
+    "created",
+    "stack_info",
+    "thread",
+    "relativeCreated",
+    "process",
+    "module",
+    "pathname",
+    "funcName",
+    "msg",
+    "lineno",
+    "taskName",
+    "name",
+    "args",
+    "levelname",
+    "levelno",
+    "threadName",
+    "filename",
+    "processName",
+}
 
 class JsonLinesFormatter(Formatter):
     def format(self, record: LogRecord) -> str:
@@ -17,11 +41,12 @@ class JsonLinesFormatter(Formatter):
             "message": record.getMessage(),
         }
 
-        if hasattr(record, "batch_size"):
-            message["batch_size"] = getattr(record, "batch_size")
-        if hasattr(record, "number_of_rows"):
-            message["number_of_rows"] = getattr(record, "number_of_rows")
+        for _ in record.__dict__.keys():
+            if _ not in PARAMETERS:
+                message[_] = getattr(record, _)
 
         if record.exc_info:
             message["exception_message"] = self.formatException(record.exc_info)
+        if record.stack_info:
+            message["stack_info"] = self.formatStack(record.stack_info)
         return json.dumps(message)

@@ -1,5 +1,6 @@
 import datetime
 from collections.abc import Iterator, Sequence
+from time import sleep
 from typing import Any, Optional
 
 import pyarrow as pa
@@ -32,6 +33,7 @@ class ArrowBatchReader:
             "Initialized Arrow Batch Generator for resource %s at %s",
             self.name,
             str(self.extraction_timestamp),
+            extra={"resource_name": self.name},
         )
         self.engine = engine
         self.query = query
@@ -76,6 +78,7 @@ class ArrowBatchReader:
                 LOGGER.debug(
                     "Transforming Raw Query to SQLAlchemy TextClause for resource %s",
                     self.name,
+                    extra={"resource_name": self.name},
                 )
                 temp = text(q)
             except Exception:
@@ -84,22 +87,30 @@ class ArrowBatchReader:
                     self.name,
                     exc_info=True,
                     stack_info=True,
+                    extra={"resource_name": self.name},
                 )
                 raise
             else:
                 LOGGER.info(
                     "TextClause creation for resource %s successful",
                     self.name,
+                    extra={"resource_name": self.name},
                 )
                 result = temp
         else:
-            LOGGER.info("Query for resource %s is already TextClause", self.name)
+            LOGGER.info(
+                "Query for resource %s is already TextClause",
+                self.name,
+                extra={"resource_name": self.name},
+            )
             result = q
         if bind_params is not None:
             if isinstance(bind_params, dict):
                 try:
                     LOGGER.debug(
-                        "Binding Parameters to TextClause for resource %s", self.name
+                        "Binding Parameters to TextClause for resource %s",
+                        self.name,
+                        extra={"resource_name": self.name},
                     )
                     temp = result.bindparams(**bind_params)
                 except Exception as error:
@@ -107,6 +118,7 @@ class ArrowBatchReader:
                         "Error when binding Parameters to TextClause for resource %s",
                         self.name,
                         exc_info=True,
+                        extra={"resource_name": self.name},
                     )
                     raise error
                 else:
@@ -116,13 +128,21 @@ class ArrowBatchReader:
             return result
 
     def _translate_original_schema(self, cursor_description, driver):
-        LOGGER.debug("Translating original schema for resource %s", self.name)
+        LOGGER.debug(
+            "Translating original schema for resource %s",
+            self.name,
+            extra={"resource_name": self.name},
+        )
         res = create_arrow_schema(cursor_description, driver)
         return res
 
     def _precompute_final_schema(self, original_schema: pa.Schema):
         try:
-            LOGGER.debug("Rebuilding final arrow schema for resource %s", self.name)
+            LOGGER.debug(
+                "Rebuilding final arrow schema for resource %s",
+                self.name,
+                extra={"resource_name": self.name},
+            )
             temp = self._kept_fields(original_schema)
             temp.extend(self.metadata_enrichment.keys())
             result = pa.schema(temp)
@@ -130,6 +150,7 @@ class ArrowBatchReader:
             LOGGER.error(
                 "Error in the creation of the final arrow schema for resource %s",
                 self.name,
+                extra={"resource_name": self.name},
             )
             raise
         else:
@@ -140,7 +161,11 @@ class ArrowBatchReader:
 
     def _row_to_columns_transposition(self, rows: Sequence[Row[Any]]):
         try:
-            LOGGER.debug("Transposing source cursor result for resource %s", self.name)
+            LOGGER.debug(
+                "Transposing source cursor result for resource %s",
+                self.name,
+                extra={"resource_name": self.name},
+            )
             result = zip(*rows)
         except Exception as error:
             LOGGER.error(
@@ -148,12 +173,14 @@ class ArrowBatchReader:
                 self.name,
                 exc_info=True,
                 stack_info=True,
+                extra={"resource_name": self.name},
             )
             raise error
         else:
             LOGGER.info(
                 "Created a zipped list of rows for resource %s",
                 self.name,
+                extra={"resource_name": self.name},
             )
             return result
 
@@ -164,7 +191,9 @@ class ArrowBatchReader:
         temp_schema = []
         try:
             LOGGER.debug(
-                "Building Arrays for the Arrow RecordBatch for resource %s", self.name
+                "Building Arrays for the Arrow RecordBatch for resource %s",
+                self.name,
+                extra={"resource_name": self.name},
             )
             for array, field in zip(transposed_columns, schema):
                 if field.name in kept_columns:
@@ -175,6 +204,7 @@ class ArrowBatchReader:
                         "Ignored Field %s for resource %s. Removing from in process schema...",
                         field.name,
                         self.name,
+                        extra={"resource_name": self.name},
                     )
 
             num_of_rows = len(temp_arrays[0]) if temp_arrays else 0
@@ -183,6 +213,7 @@ class ArrowBatchReader:
                     "Enriching with metadata with the name %s the resource %s",
                     field.name,
                     self.name,
+                    extra={"resource_name": self.name},
                 )
                 temp_arrays.append(
                     pa.repeat(value=value, size=num_of_rows).cast(field.type)
@@ -190,7 +221,8 @@ class ArrowBatchReader:
                 temp_schema.append(field)
 
             record_batch = pa.record_batch(
-                data=temp_arrays, schema=pa.schema(temp_schema)
+                data=temp_arrays,
+                schema=pa.schema(temp_schema),
             )
         except Exception as error:
             LOGGER.error(
@@ -198,10 +230,15 @@ class ArrowBatchReader:
                 self.name,
                 exc_info=True,
                 stack_info=True,
+                extra={"resource_name": self.name},
             )
             raise error
         else:
-            LOGGER.info("Created Arrow RecordBatch for resource %s", self.name)
+            LOGGER.info(
+                "Created Arrow RecordBatch for resource %s",
+                self.name,
+                extra={"resource_name": self.name},
+            )
             return record_batch
 
     def generate_batches(
@@ -226,6 +263,7 @@ class ArrowBatchReader:
                     LOGGER.warning(
                         "Arrow Schema wan not provided for resource %s. It will be created ...",
                         self.name,
+                        extra={"resource_name": self.name},
                     )
                     arrow_schema = self._translate_original_schema(
                         cursor_description, driver
@@ -233,23 +271,29 @@ class ArrowBatchReader:
                 kept_fields = set(
                     field.name for field in self._kept_fields(arrow_schema)
                 )
+                batch_number = 0
+                total_rows = 0
                 while source_batch := cursor_result.fetchmany(self.batch_size):
                     final_batch = self._compile_arrays_to_record_batch(
                         self._row_to_columns_transposition(source_batch),
                         arrow_schema,
                         kept_fields,
                     )
+                    total_rows += final_batch.num_rows
                     yield final_batch
                     LOGGER.info(
-                        "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
+                        "Generated Arrow RecordBatch for resource %s",
                         self.name,
-                        final_batch.nbytes,
-                        final_batch.num_rows,
                         extra={
-                            "batch_size": final_batch.nbytes,
+                            "resource_name": self.name,
+                            "batch_id": batch_number,
                             "number_of_rows": final_batch.num_rows,
+                            "total_rows": total_rows,
+                            "batch_size": final_batch.nbytes,
                         },
                     )
+                    batch_number += 1
+                    sleep(0.01)
 
     def create_batch_reader(self, override_schema: pa.Schema):
         arrow_schema = override_schema
@@ -271,6 +315,7 @@ class ArrowBatchReader:
                 LOGGER.warning(
                     "Arrow Schema wan not provided for resource %s. It will be created ...",
                     self.name,
+                    extra={"resource_name": self.name},
                 )
                 arrow_schema = self._translate_original_schema(
                     cursor_description, driver
@@ -287,23 +332,29 @@ class ArrowBatchReader:
                 kept_fields = set(
                     field.name for field in self._kept_fields(arrow_schema)
                 )
+                total_rows = 0
+                batch_number = 0
                 while source_batch := cursor_result.fetchmany(self.batch_size):
                     final_batch = self._compile_arrays_to_record_batch(
                         self._row_to_columns_transposition(source_batch),
                         arrow_schema,
                         kept_fields,
                     )
+                    total_rows += final_batch.num_rows
                     yield final_batch
                     LOGGER.info(
-                        "Generated Arrow RecordBatch for resource %s || Size: %s||Rows: %s",
+                        "Generated Arrow RecordBatch for resource %s",
                         self.name,
-                        final_batch.nbytes,
-                        final_batch.num_rows,
                         extra={
-                            "batch_size": final_batch.nbytes,
+                            "resource_name": self.name,
+                            "batch_id": batch_number,
                             "number_of_rows": final_batch.num_rows,
+                            "total_rows": total_rows,
+                            "batch_size": final_batch.nbytes,
                         },
                     )
+                    batch_number += 1
+                    sleep(0.01)
             finally:
                 cursor_result.close()
                 connection.close()
