@@ -1,20 +1,24 @@
+import os
 from hashlib import sha256
-from time import sleep, time_ns
+from pathlib import Path
+from time import sleep
 
-import pyarrow.parquet as pq
 from dotenv import dotenv_values
 from sqlalchemy import create_engine
 
 from arrow_translator import create_record_batch_reader
+from arrow_translator.logger import FILE_LOGGER
 
 ENGINE = create_engine(dotenv_values(".env")["SAP_HANA"])
 QUERY = """select * from saperp.vbrp where 1 = 1
-and year(prsdt) = 2026
-and month(prsdt) = 1
+and prsdt >= '20260101' and prsdt < '20260201'
 """
 
 
 def test_1():
+    # if (_log_path := Path.cwd().joinpath(FILE_LOGGER)).exists():
+    #     _log_path.unlink(True)
+
     total_rows = 0
     print("=" * 100)
     for _, i in enumerate(
@@ -22,7 +26,7 @@ def test_1():
             "some_name",
             ENGINE,
             QUERY,
-            batch_size=100_000,
+            batch_size=6_000,
             enrichment_map={
                 "_snapshot_id": 0,
                 "_pipeline_name": "some_pipeline_name",
@@ -35,8 +39,8 @@ def test_1():
         total_rows += i.num_rows
         print(f"Extracted batch {batch_number} with {i.num_rows} of {total_rows}")
         # print(i.schema)
-        with pq.ParquetWriter(f".filedump/{time_ns()}.parquet", i.schema) as writer:
-            writer.write_batch(i)
+        # with pq.ParquetWriter(f".filedump/{time_ns()}.parquet", i.schema) as writer:
+        #     writer.write_batch(i)
 
     print("=" * 100)
     sleep(1)
