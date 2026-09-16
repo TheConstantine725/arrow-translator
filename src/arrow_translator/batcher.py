@@ -17,7 +17,6 @@ class ArrowBatchReader:
     Helping to query the data more flexibly and in a streaming way.
     """
 
-    __logger = get_logger()
 
     def __init__(
         self,
@@ -31,7 +30,7 @@ class ArrowBatchReader:
     ):
         self.name = name
         self.extraction_timestamp = datetime.datetime.now().astimezone()
-        self.__logger.debug(
+        get_logger().debug(
             "Initialized Arrow Batch Generator for resource %s at %s",
             self.name,
             str(self.extraction_timestamp),
@@ -77,14 +76,14 @@ class ArrowBatchReader:
         result = None
         if not isinstance(q, TextClause):
             try:
-                self.__logger.debug(
+                get_logger().debug(
                     "Transforming Raw Query to SQLAlchemy TextClause for resource %s",
                     self.name,
                     extra={"resource_name": self.name},
                 )
                 temp = text(q)
             except Exception:
-                self.__logger.error(
+                get_logger().error(
                     "TextClause creation for resource %s failed. Exiting the program",
                     self.name,
                     exc_info=True,
@@ -93,14 +92,14 @@ class ArrowBatchReader:
                 )
                 raise
             else:
-                self.__logger.info(
+                get_logger().info(
                     "TextClause creation for resource %s successful",
                     self.name,
                     extra={"resource_name": self.name},
                 )
                 result = temp
         else:
-            self.__logger.info(
+            get_logger().info(
                 "Query for resource %s is already TextClause",
                 self.name,
                 extra={"resource_name": self.name},
@@ -109,14 +108,14 @@ class ArrowBatchReader:
         if bind_params is not None:
             if isinstance(bind_params, dict):
                 try:
-                    self.__logger.debug(
+                    get_logger().debug(
                         "Binding Parameters to TextClause for resource %s",
                         self.name,
                         extra={"resource_name": self.name},
                     )
                     temp = result.bindparams(**bind_params)
                 except Exception as error:
-                    self.__logger.error(
+                    get_logger().error(
                         "Error when binding Parameters to TextClause for resource %s",
                         self.name,
                         exc_info=True,
@@ -130,7 +129,7 @@ class ArrowBatchReader:
             return result
 
     def _translate_original_schema(self, cursor_description, driver):
-        self.__logger.debug(
+        get_logger().debug(
             "Translating original schema for resource %s",
             self.name,
             extra={"resource_name": self.name},
@@ -140,7 +139,7 @@ class ArrowBatchReader:
 
     def _precompute_final_schema(self, original_schema: pa.Schema):
         try:
-            self.__logger.debug(
+            get_logger().debug(
                 "Rebuilding final arrow schema for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
@@ -149,7 +148,7 @@ class ArrowBatchReader:
             temp.extend(self.metadata_enrichment.keys())
             result = pa.schema(temp)
         except Exception:
-            self.__logger.error(
+            get_logger().error(
                 "Error in the creation of the final arrow schema for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
@@ -163,14 +162,14 @@ class ArrowBatchReader:
 
     def _row_to_columns_transposition(self, rows: Sequence[Row[Any]]):
         try:
-            self.__logger.debug(
+            get_logger().debug(
                 "Transposing source cursor result for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
             )
             result = zip(*rows)
         except Exception as error:
-            self.__logger.error(
+            get_logger().error(
                 "Error in the transposition of the dataset %s. Exiting the program",
                 self.name,
                 exc_info=True,
@@ -179,7 +178,7 @@ class ArrowBatchReader:
             )
             raise error
         else:
-            self.__logger.info(
+            get_logger().info(
                 "Created a zipped list of rows for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
@@ -192,7 +191,7 @@ class ArrowBatchReader:
         temp_arrays = []
         temp_schema = []
         try:
-            self.__logger.debug(
+            get_logger().debug(
                 "Building Arrays for the Arrow RecordBatch for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
@@ -202,7 +201,7 @@ class ArrowBatchReader:
                     temp_arrays.append(pa.array(obj=array, type=field.type))
                     temp_schema.append(field)
                 else:
-                    self.__logger.debug(
+                    get_logger().debug(
                         "Ignored Field %s for resource %s. Removing from in process schema...",
                         field.name,
                         self.name,
@@ -211,7 +210,7 @@ class ArrowBatchReader:
 
             num_of_rows = len(temp_arrays[0]) if temp_arrays else 0
             for field, value in self.metadata_enrichment.items():
-                self.__logger.debug(
+                get_logger().debug(
                     "Enriching with metadata with the name %s the resource %s",
                     field.name,
                     self.name,
@@ -227,7 +226,7 @@ class ArrowBatchReader:
                 schema=pa.schema(temp_schema),
             )
         except Exception as error:
-            self.__logger.error(
+            get_logger().error(
                 "Error in the transformation of the arrow arrays to a RecordBatch for resource %s",
                 self.name,
                 exc_info=True,
@@ -236,7 +235,7 @@ class ArrowBatchReader:
             )
             raise error
         else:
-            self.__logger.info(
+            get_logger().info(
                 "Created Arrow RecordBatch for resource %s",
                 self.name,
                 extra={"resource_name": self.name},
@@ -262,7 +261,7 @@ class ArrowBatchReader:
                 driver = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
                 if arrow_schema is None:
-                    self.__logger.warning(
+                    get_logger().warning(
                         "Arrow Schema wan not provided for resource %s. It will be created ...",
                         self.name,
                         extra={"resource_name": self.name},
@@ -283,7 +282,7 @@ class ArrowBatchReader:
                     )
                     total_rows += final_batch.num_rows
                     yield final_batch
-                    self.__logger.info(
+                    get_logger().info(
                         "Generated Arrow RecordBatch for resource %s",
                         self.name,
                         extra={
@@ -314,7 +313,7 @@ class ArrowBatchReader:
             if arrow_schema is None:
                 driver = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
-                self.__logger.warning(
+                get_logger().warning(
                     "Arrow Schema wan not provided for resource %s. It will be created ...",
                     self.name,
                     extra={"resource_name": self.name},
@@ -344,7 +343,7 @@ class ArrowBatchReader:
                     )
                     total_rows += final_batch.num_rows
                     yield final_batch
-                    self.__logger.info(
+                    get_logger().info(
                         "Generated Arrow RecordBatch for resource %s",
                         self.name,
                         extra={
