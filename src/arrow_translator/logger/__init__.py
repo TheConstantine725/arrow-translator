@@ -6,7 +6,7 @@ DEFAULT_LOGGER_NAME = "arrow-translator"
 FILE_LOGGER = ".arrow-trans.log"
 
 
-def create_default_logger():
+def _build_default_logger():
     logger = logging.getLogger(DEFAULT_LOGGER_NAME)
     file_handler = logging.FileHandler(encoding="utf-8", filename=FILE_LOGGER, mode="a")
     file_handler.setLevel(level=logging.DEBUG)
@@ -25,16 +25,20 @@ def create_default_logger():
     return logger
 
 
-LOGGER = create_default_logger()
+_ARROW_TRANSLATOR_LOGGER_NAME = DEFAULT_LOGGER_NAME
+_ARROW_TRANSLATOR_DEFAULT_LOGGER = _build_default_logger()
+_ACTIVE_ARROW_TRANSLATOR_LOGGER = _ARROW_TRANSLATOR_DEFAULT_LOGGER
 
+def get_logger() -> logging.Logger:
+    return _ACTIVE_ARROW_TRANSLATOR_LOGGER
 
 def change_logger(logger: logging.Logger):
-    LOGGER = logger
+    global _ACTIVE_ARROW_TRANSLATOR_LOGGER, _ARROW_TRANSLATOR_LOGGER_NAME
+    _ACTIVE_ARROW_TRANSLATOR_LOGGER, _ARROW_TRANSLATOR_LOGGER_NAME = logger, logger.name
+    if logger.name != DEFAULT_LOGGER_NAME:
+        logger.info(
+            "Arrow-Translator initiallized with the non default logger: %s", logger.name
+        )
 
 
-if LOGGER.name != DEFAULT_LOGGER_NAME:
-    LOGGER.info(
-        "Arrow-Translator initiallized with the non default logger: %s", LOGGER.name
-    )
-else:
-    LOGGER.info("Arrow-Translator Initialized with default Settings")
+get_logger().info("Arrow-Translator Initialized with default Settings")
