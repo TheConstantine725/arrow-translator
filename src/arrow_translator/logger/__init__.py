@@ -41,4 +41,5 @@ def change_logger(logger: logging.Logger):
         )
 
 
-get_logger().info("Arrow-Translator Initialized with default Settings")
+if get_logger().name == DEFAULT_LOGGER_NAME:
+    get_logger().info("Arrow-Translator Initialized with default Settings")

@@ -1,6 +1,6 @@
 [project]
 name = "arrow-translator"
-version = "0.3.3"
+version = "0.3.4"
 description = "Small Library to extract data using sqlalchemy project to pyarrow (Arrow) RecordBatches"
 readme = "README.md"
 authors = [
