@@ -1,17 +1,14 @@
-import os
 from hashlib import sha256
-from pathlib import Path
 from time import sleep
 
 from dotenv import dotenv_values
 from sqlalchemy import create_engine
 
 from arrow_translator import create_record_batch_reader
-from arrow_translator.logger import FILE_LOGGER
 
 ENGINE = create_engine(dotenv_values(".env")["SAP_HANA"])
 QUERY = """select * from saperp.vbrp where 1 = 1
-and prsdt >= '20260101' and prsdt < '20260201'
+and prsdt >= '20260101' and prsdt < '20260105'
 """
 
 
@@ -38,9 +35,6 @@ def test_1():
         batch_number = _ + 1
         total_rows += i.num_rows
         print(f"Extracted batch {batch_number} with {i.num_rows} of {total_rows}")
-        # print(i.schema)
-        # with pq.ParquetWriter(f".filedump/{time_ns()}.parquet", i.schema) as writer:
-        #     writer.write_batch(i)
 
     print("=" * 100)
     sleep(1)

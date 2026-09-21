@@ -314,7 +314,7 @@ class ArrowBatchReader:
                 driver = connection.engine.driver
                 cursor_description = cursor_result.cursor.description
                 get_logger().warning(
-                    "Arrow Schema wan not provided for resource %s. It will be created ...",
+                    "Arrow Schema was not provided for resource %s. It will be created ...",
                     self.name,
                     extra={"resource_name": self.name},
                 )
