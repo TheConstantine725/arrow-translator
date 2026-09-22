@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import pyarrow as pa
 
@@ -33,12 +33,40 @@ class FieldDescriptor:
                 _name = _name.replace(pat, "_")
         return _name.lower()
 
+    def ensure_precision(self, decimal_type: Literal["decimal128", "decimal256"]):
+        _precision = self.precision
+        if decimal_type == "decimal128":
+            if _precision is None or (_precision > 38 or _precision < 1):
+                _precision = 38
+            return _precision
+        elif decimal_type == "decimal256":
+            if _precision is None or (_precision > 76 or _precision < 1):
+                _precision = 76
+            return _precision
+
+    def ensure_scale(self, precision: int):
+        _scale = self.scale
+        if _scale is None:
+            _scale = 0
+        if _scale < 0:
+            print("The scale is a negative number, reverting to 0")
+            _scale = 0
+        if _scale > precision:
+            raise ValueError(
+                "Scale in a PyArrow Decimal cannot be bigger than the general number precision"
+            )
+        return _scale
+
     def to_pyarrow(self, dialect: str) -> pa.Field:
         data_type = Lexicon.to_pyarrow(dialect, self.type_code)
         if isinstance(data_type, pa.Decimal128Type):
-            data_type = pa.decimal128(self.precision, self.scale)
+            _precision = self.ensure_precision("decimal128")
+            _scale = self.ensure_scale(_precision)
+            data_type = pa.decimal128(_precision, _scale)
         elif isinstance(data_type, pa.Decimal256Type):
-            data_type = pa.decimal256(self.precision, self.scale)
+            _precision = self.ensure_precision("decimal256")
+            _scale = self.ensure_scale(_precision)
+            data_type = pa.decimal128(_precision, _scale)
         return pa.field(name=self.fixed_name, type=data_type, nullable=self.is_nullable)
 
 

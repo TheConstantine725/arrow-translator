@@ -1,8 +1,9 @@
 """
 OIDs of PostgreSQL psycopg2 driver mapped to Apache Arrow (PyArrow) datatypes
 """
-
 import pyarrow as pa
+
+
 
 DIALECT = "psycopg2"
 TYPE_MAPS = {
