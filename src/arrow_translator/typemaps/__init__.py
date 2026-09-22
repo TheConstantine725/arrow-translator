@@ -9,8 +9,9 @@ from .mysql_connector_python import (
 from .mysql_connector_python import (
     TYPE_MAPS as MYSQL_CONN_TYPES,
 )
-from .oracledb import DIALECT as ORCL_DIALECT
-from .oracledb import TYPE_MAPS as ORCL_TYPES
+
+# from .oracledb import DIALECT as ORCL_DIALECT
+# from .oracledb import TYPE_MAPS as ORCL_TYPES
 from .psycopg2 import DIALECT as PSYCOPG2_DIALECT
 from .psycopg2 import TYPE_MAPS as PSYCOPG2_TYPES
 from .psycopg3 import DIALECT as PSYCOPG3_DIALECT
@@ -31,7 +32,7 @@ class Lexicon:
         MYSQL_CONN_DIALECT: MYSQL_CONN_TYPES,
         MSSQL_DIALECT: MSSQL_TYPES,
         PYODBC_DIALECT: PYODBC_TYPES,
-        ORCL_DIALECT: ORCL_TYPES,
+        # ORCL_DIALECT: ORCL_TYPES,
         HDBCLI_DIALECT: HDBCLI_TYPES,
         PSYCOPG3_DIALECT: PSYCOPG3_TYPES,
     }

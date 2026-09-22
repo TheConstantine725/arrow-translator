@@ -22,5 +22,5 @@ dev = [
     "sqlalchemy-hana",
     "pyarrow-stubs>=20.0.0.20260819",
     "python-dotenv",
-    "oracledb>=26.0.0",
+    # "oracledb>=26.0.0",
 ]

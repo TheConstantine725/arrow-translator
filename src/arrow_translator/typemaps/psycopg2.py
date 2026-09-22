@@ -3,10 +3,6 @@ OIDs of PostgreSQL psycopg2 driver mapped to Apache Arrow (PyArrow) datatypes
 """
 import pyarrow as pa
 
-try:
-    import psycopg2
-except ImportError:
-    raise
 
 
 DIALECT = "psycopg2"

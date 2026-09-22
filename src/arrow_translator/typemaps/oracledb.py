@@ -1,12 +1,8 @@
 """
 Data Type Definitions of OracleDB (Oracle DB) python library to Apache Arrow(PyArrow) data types
 """
+# import oracledb as orcl
 import pyarrow as pa
-
-try:
-    import oracledb as orcl
-except ImportError:
-    raise
 
 DIALECT = "oracledb"
 TYPE_MAPS = {  # modern Oracle driver, same type names
