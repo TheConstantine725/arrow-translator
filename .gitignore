@@ -12,3 +12,4 @@ wheels/
 .env
 **.log
 .filedump
+.drivers

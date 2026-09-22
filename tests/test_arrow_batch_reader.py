@@ -34,6 +34,7 @@ def test_1():
     ):
         batch_number = _ + 1
         total_rows += i.num_rows
+        print(i)
         print(f"Extracted batch {batch_number} with {i.num_rows} of {total_rows}")
 
     print("=" * 100)

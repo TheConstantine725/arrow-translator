@@ -1,8 +1,6 @@
 from typing import Any
 
 # ================== ADD DIALECTS HERE =======================================================
-from .cx_Oracle import DIALECT as CX_ORACLE_DIALECT
-from .cx_Oracle import TYPE_MAPS as CX_ORACLE_TYPES
 from .hdbcli import DIALECT as HDBCLI_DIALECT
 from .hdbcli import TYPE_MAPS as HDBCLI_TYPES
 from .mysql_connector_python import (
@@ -33,7 +31,6 @@ class Lexicon:
         MYSQL_CONN_DIALECT: MYSQL_CONN_TYPES,
         MSSQL_DIALECT: MSSQL_TYPES,
         PYODBC_DIALECT: PYODBC_TYPES,
-        CX_ORACLE_DIALECT: CX_ORACLE_TYPES,
         ORCL_DIALECT: ORCL_TYPES,
         HDBCLI_DIALECT: HDBCLI_TYPES,
         PSYCOPG3_DIALECT: PSYCOPG3_TYPES,
@@ -43,7 +40,6 @@ class Lexicon:
     def to_pyarrow(cls, driver: str, oid: Any):
         return cls.typemaps[driver][oid]
 
-    @property
     @classmethod
     def available_drivers(cls):
         return cls.typemaps.keys()

@@ -4,6 +4,11 @@ OIDs for SAP HANA' s hdbcli data types mapped to Apache Arrow(Pyarrow) data type
 
 import pyarrow as pa
 
+try:
+    import hdbcli
+except ImportError:
+    raise
+
 DIALECT = "hdbcli"
 TYPE_MAPS = {
     # --- hdbcli (SAP HANA) type codes ---

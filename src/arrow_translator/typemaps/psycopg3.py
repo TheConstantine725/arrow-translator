@@ -4,6 +4,11 @@ OIDs for Postgres Psycopg3 Binary to Apache Arrow Datatypes
 
 import pyarrow as pa
 
+try:
+    import psycopg
+except ImportError:
+    raise
+
 DIALECT = "psycopg"
 TYPE_MAPS = {
     16: pa.bool_(),  # BOOL
