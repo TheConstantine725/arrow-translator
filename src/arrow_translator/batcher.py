@@ -198,8 +198,25 @@ class ArrowBatchReader:
             )
             for array, field in zip(transposed_columns, schema):
                 if field.name in kept_columns:
-                    temp_arrays.append(pa.array(obj=array, type=field.type))
-                    temp_schema.append(field)
+                    try:
+                        get_logger().debug(
+                            "Creating array with then name %s of datatype %s for resource %s",
+                            field.name,
+                            field.type,
+                            self.name,
+                        )
+                        _loop_array = pa.array(obj=array, type=field.type)
+                    except Exception:
+                        get_logger().error(
+                            "Error in the creation of the array with then name %s of datatype %s for resource %s",
+                            field.name,
+                            field.type,
+                            self.name,
+                        )
+                        raise
+                    else:
+                        temp_arrays.append(_loop_array)
+                        temp_schema.append(field)
                 else:
                     get_logger().debug(
                         "Ignored Field %s for resource %s. Removing from in process schema...",
