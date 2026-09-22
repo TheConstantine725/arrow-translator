@@ -208,11 +208,10 @@ class ArrowBatchReader:
                         _loop_array = pa.array(obj=array, type=field.type)
                     except Exception:
                         get_logger().error(
-                            "Error in the creation of the array with then name %s of datatype %s for resource %s. Got array of type %s",
+                            "Error in the creation of the array with then name %s of datatype %s for resource %s",
                             field.name,
                             field.type,
                             self.name,
-                            set((type(_) for _ in array)),
                         )
                         raise
                     else:
