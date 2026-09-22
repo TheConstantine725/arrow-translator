@@ -10,6 +10,10 @@ Available Dialects:
     * Similar to pyodbc, oracledb might require the OracleDB driver's binaries or executables to be installed on the machine (Thick Mode). For more information, please see [here](https://python-oracledb.readthedocs.io/en/latest/user_guide/initialization.html#enablingthick) 
   * SAP HANA (hdbcli)
 
+⚠️**WARNING**
+OracleDB Driver is temporarily disabled due to import and dependency issues
+
+
 # How to Use
 
 ## First Steps
