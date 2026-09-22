@@ -212,7 +212,7 @@ class ArrowBatchReader:
                             field.name,
                             field.type,
                             self.name,
-                            str(type(array)),
+                            set((type(_) for _ in array)),
                         )
                         raise
                     else:
